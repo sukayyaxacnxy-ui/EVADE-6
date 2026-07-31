@@ -1,0 +1,431 @@
+-- โหลด Rayfield UI Library
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+-- สร้างหน้าต่าง UI
+local Window = Rayfield:CreateWindow({
+   Name = "Evade Ultimate Script",
+   LoadingTitle = "กำลังโหลดระบบ Evade...",
+   LoadingSubtitle = "โดย AI Collaborator",
+   ConfigurationSaving = {
+      Enabled = false,
+      FolderName = nil,
+      FileName = "EvadeConfig"
+   },
+   Discord = {
+      Enabled = false,
+      Invite = "",
+      RememberJoins = true
+   },
+   KeySystem = false,
+})
+
+-- สร้าง Tab หลัก
+local Tab = Window:CreateTab("ฟังก์ชันหลัก", 4483362458)
+local UtilityTab = Window:CreateTab("ระบบเสริม", 4483362458)
+
+-- ตัวแปรควบคุมสถานะ
+local _G = _G
+_G.TokenFarm = false
+_G.AutoJump = false
+_G.PlayerSpeed = 16
+_G.NoclipEnabled = false
+_G.AutoDashGui = false
+
+-- Service พื้นฐาน
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+-- ==================== ฟังก์ชันที่ 1: ฟาร์มโทเค็น (วาร์ปไปเก็บ หลบไกล 1,000 สตัด แล้วกลับจุดเดิม) ====================
+Tab:CreateToggle({
+   Name = "ฟาร์มโทเค็นออโต้ (Token Farm)",
+   CurrentValue = false,
+   Flag = "TokenFarmFlag",
+   Callback = function(Value)
+      _G.TokenFarm = Value
+      
+      task.spawn(function()
+         local originalPos = nil
+         local safePlatform = nil
+         
+         while _G.TokenFarm do
+            task.wait(0.5)
+            pcall(function()
+               local character = LocalPlayer.Character
+               if character and character:FindFirstChild("HumanoidRootPart") then
+                  local rootPart = character.HumanoidRootPart
+                  
+                  local targetToken = nil
+                  for _, obj in pairs(workspace:GetDescendants()) do
+                     if not _G.TokenFarm then break end
+                     local name = string.lower(obj.Name)
+                     if name:find("token") or name:find("money") or name:find("cash") or name:find("pickup") then
+                        if obj:IsA("ProximityPrompt") and obj.Parent then
+                           targetToken = obj.Parent
+                           break
+                        elseif obj:IsA("BasePart") then
+                           targetToken = obj
+                           break
+                        end
+                     end
+                  end
+                  
+                  if targetToken then
+                     if not originalPos then
+                        originalPos = rootPart.CFrame
+                     end
+                     
+                     if not safePlatform or not safePlatform.Parent then
+                        safePlatform = Instance.new("Part")
+                        safePlatform.Size = Vector3.new(20, 1, 20)
+                        safePlatform.Position = rootPart.Position + Vector3.new(0, 1000, 0)
+                        safePlatform.Anchored = true
+                        safePlatform.Transparency = 0.5
+                        safePlatform.Parent = workspace
+                     end
+                     
+                     rootPart.CFrame = targetToken.CFrame + Vector3.new(0, 3, 0)
+                     task.wait(0.3)
+                     
+                     for _, p in pairs(targetToken:GetDescendants()) do
+                        if p:IsA("ProximityPrompt") then
+                           fireproximityprompt(p)
+                        end
+                     end
+                     task.wait(0.2)
+                     
+                     if originalPos then
+                        rootPart.CFrame = originalPos
+                     end
+                  end
+               end
+            end)
+         end
+         
+         if safePlatform then
+            safePlatform:Destroy()
+         end
+      end)
+   end,
+})
+
+-- ==================== ฟังก์ชันที่ 2: Auto Jump (กระโดดรอแตะพื้น ไม่ลอย) ====================
+Tab:CreateToggle({
+   Name = "Auto Jump",
+   CurrentValue = false,
+   Flag = "AutoJumpFlag",
+   Callback = function(Value)
+      _G.AutoJump = Value
+      
+      task.spawn(function()
+         while _G.AutoJump do
+            task.wait(0.05)
+            pcall(function()
+               local character = LocalPlayer.Character
+               if character and character:FindFirstChild("Humanoid") then
+                  local humanoid = character.Humanoid
+                  if humanoid.FloorMaterial ~= Enum.Material.Air then
+                     humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                  end
+               end
+            end)
+         end
+      end)
+   end,
+})
+
+-- ==================== ฟังก์ชันที่ 3: หน้าต่างลอย (Floating GUI) สำหรับพุ่งไปข้างหน้า (มีปุ่มเปิด-ปิดในจอและปรับความเร็วได้) ====================
+local DashGui = Instance.new("ScreenGui")
+DashGui.Name = "EvadeDashGui"
+DashGui.ResetOnSpawn = false
+DashGui.Enabled = false
+DashGui.Parent = game.CoreGui
+
+local DashFrame = Instance.new("Frame")
+DashFrame.Size = UDim2.new(0, 210, 0, 110)
+DashFrame.Position = UDim2.new(0.5, -105, 0.2, 0)
+DashFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+DashFrame.BorderSizePixel = 0
+DashFrame.Active = true
+DashFrame.Draggable = true
+DashFrame.Parent = DashGui
+
+local DashCorner = Instance.new("UICorner")
+DashCorner.CornerRadius = UDim.new(0, 8)
+DashCorner.Parent = DashFrame
+
+local DashTitle = Instance.new("TextLabel")
+DashTitle.Size = UDim2.new(1, 0, 0, 30)
+DashTitle.BackgroundTransparency = 1
+DashTitle.Text = "Dash Controller"
+DashTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+DashTitle.TextSize = 14
+DashTitle.Font = Enum.Font.SourceSansBold
+DashTitle.Parent = DashFrame
+
+local SpeedBox = Instance.new("TextBox")
+SpeedBox.Size = UDim2.new(0.8, 0, 0, 30)
+SpeedBox.Position = UDim2.new(0.1, 0, 0.35, 0)
+SpeedBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+SpeedBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+SpeedBox.Text = "30"
+SpeedBox.TextSize = 14
+SpeedBox.Font = Enum.Font.SourceSans
+SpeedBox.Parent = DashFrame
+
+local BoxCorner = Instance.new("UICorner")
+BoxCorner.CornerRadius = UDim.new(0, 6)
+BoxCorner.Parent = SpeedBox
+
+local InnerDashToggleBtn = Instance.new("TextButton")
+InnerDashToggleBtn.Size = UDim2.new(0.8, 0, 0, 30)
+InnerDashToggleBtn.Position = UDim2.new(0.1, 0, 0.7, 0)
+InnerDashToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+InnerDashToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+InnerDashToggleBtn.Text = "Dash: OFF"
+InnerDashToggleBtn.TextSize = 14
+InnerDashToggleBtn.Font = Enum.Font.SourceSansBold
+InnerDashToggleBtn.Parent = DashFrame
+
+local BtnCorner = Instance.new("UICorner")
+BtnCorner.CornerRadius = UDim.new(0, 6)
+BtnCorner.Parent = InnerDashToggleBtn
+
+local isDashingActive = false
+InnerDashToggleBtn.MouseButton1Click:Connect(function()
+   isDashingActive = not isDashingActive
+   if isDashingActive then
+      InnerDashToggleBtn.Text = "Dash: ON"
+      InnerDashToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+   else
+      InnerDashToggleBtn.Text = "Dash: OFF"
+      InnerDashToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+   end
+end)
+
+-- ลูปทำงานพุ่งไปข้างหน้าเมื่อกดเปิดในหน้าต่างลอย
+task.spawn(function()
+   while true do
+      task.wait(0.05)
+      if isDashingActive then
+         pcall(function()
+            local character = LocalPlayer.Character
+            if character and character:FindFirstChild("HumanoidRootPart") then
+               local rootPart = character.HumanoidRootPart
+               local customSpeed = tonumber(SpeedBox.Text) or 30
+               if customSpeed > 55 then customSpeed = 55 end
+               
+               local dashForce = rootPart.CFrame.LookVector * customSpeed
+               rootPart.Velocity = Vector3.new(dashForce.X, rootPart.Velocity.Y, dashForce.Z)
+            end
+         end)
+      end
+   end
+end)
+
+Tab:CreateToggle({
+   Name = "เปิดหน้าต่างพุ่งไปข้างหน้า (Floating GUI)",
+   CurrentValue = false,
+   Flag = "DashGuiToggle",
+   Callback = function(Value)
+      DashGui.Enabled = Value
+      if not Value then
+         isDashingActive = false
+         InnerDashToggleBtn.Text = "Dash: OFF"
+         InnerDashToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+      end
+   end,
+})
+
+-- ==================== ระบบเสริม: ความเร็วผู้เล่น (แก้ให้ใช้งานได้จริง) ====================
+UtilityTab:CreateSlider({
+   Name = "ความเร็วผู้เล่น (WalkSpeed)",
+   Range = {16, 150},
+   Increment = 1,
+   CurrentValue = 16,
+   Flag = "SpeedSlider",
+   Callback = function(Value)
+      _G.PlayerSpeed = Value
+   end,
+})
+
+--บังคับใช้ความเร็วตลอดเวลาผ่าน Heartbeat ป้องกันเกมรีเซ็ตค่า WalkSpeed
+RunService.Heartbeat:Connect(function()
+   pcall(function()
+      if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+         if LocalPlayer.Character.Humanoid.WalkSpeed ~= _G.PlayerSpeed then
+            LocalPlayer.Character.Humanoid.WalkSpeed = _G.PlayerSpeed
+         end
+      end
+   end)
+end)
+
+-- ==================== ระบบเสริม: ระบบบิน (Fly ตามมุมกล้อง ตัวนิ่งตรง บังคับคอม/มือถือ สมบูรณ์) ====================
+local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+
+local flying = false
+local flySpeed = 5
+local bodyVelocity, bodyGyro
+
+local function startFly()
+    character = LocalPlayer.Character
+    if not character then return end
+    humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoidRootPart or not humanoid then return end
+
+    flying = true
+    humanoid.PlatformStand = true
+
+    bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    bodyVelocity.Parent = humanoidRootPart
+
+    bodyGyro = Instance.new("BodyGyro")
+    bodyGyro.P = 9e4
+    bodyGyro.MaxTorque = Vector3.new(9e4, 9e4, 9e4)
+    bodyGyro.CFrame = humanoidRootPart.CFrame
+    bodyGyro.Parent = humanoidRootPart
+
+    task.spawn(function()
+        local camera = workspace.CurrentCamera
+        local uis = game:GetService("UserInputService")
+        
+        while flying do
+            task.wait()
+            local moveDirection = Vector3.new(0, 0, 0)
+            
+            -- บังคับตามหน้าจอที่หัน (LookVector / RightVector) ทั้งคอมและมือถือ
+            local forward = camera.CFrame.LookVector
+            local right = camera.CFrame.RightVector
+            
+            local movingForward = false
+            local movingBackward = false
+            
+            -- ตรวจสอบปุ่มคีย์บอร์ด (PC)
+            if uis:IsKeyDown(Enum.KeyCode.W) or uis:IsKeyDown(Enum.KeyCode.Up) then
+                moveDirection = moveDirection + forward
+                movingForward = true
+            end
+            if uis:IsKeyDown(Enum.KeyCode.S) or uis:IsKeyDown(Enum.KeyCode.Down) then
+                moveDirection = moveDirection - forward
+                movingBackward = true
+            end
+            if uis:IsKeyDown(Enum.KeyCode.A) or uis:IsKeyDown(Enum.KeyCode.Left) then
+                moveDirection = moveDirection - right
+            end
+            if uis:IsKeyDown(Enum.KeyCode.D) or uis:IsKeyDown(Enum.KeyCode.Right) then
+                moveDirection = moveDirection + right
+            end
+            
+            -- ตรวจสอบทิศทางจอยสติ๊กมือถือ (Humanoid.MoveDirection เทียบกับกล้อง)
+            if humanoid.MoveDirection.Magnitude > 0 then
+                local camLook = Vector3.new(forward.X, 0, forward.Z).Unit
+                local camRight = Vector3.new(right.X, 0, right.Z).Unit
+                local moveDot = humanoid.MoveDirection:Dot(camLook)
+                
+                if moveDot > 0.3 then
+                    moveDirection = moveDirection + forward
+                    movingForward = true
+                elseif moveDot < -0.3 then
+                    moveDirection = moveDirection - forward
+                    movingBackward = true
+                end
+                
+                local rightDot = humanoid.MoveDirection:Dot(camRight)
+                if rightDot > 0.3 then
+                    moveDirection = moveDirection + right
+                elseif rightDot < -0.3 then
+                    moveDirection = moveDirection - right
+                end
+            end
+            
+            -- ล็อคตัวให้นิ่งและตรงตามมุมกล้องเป๊ะๆ ไม่ให้เอียงหรือขยับมั่ว
+            bodyVelocity.Velocity = moveDirection * (flySpeed * 10)
+            bodyGyro.CFrame = camera.CFrame
+            
+            -- บังคับให้ความเร็วโรเตชันนิ่งตรงตามกล้อง
+            humanoidRootPart.RotVelocity = Vector3.new(0, 0, 0)
+        end
+    end)
+end
+
+local function stopFly()
+    flying = false
+    if character then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.PlatformStand = false
+        end
+    end
+    if bodyVelocity then bodyVelocity:Destroy() end
+    if bodyGyro then bodyGyro:Destroy() end
+end
+
+UtilityTab:CreateToggle({
+   Name = "เปิด/ปิด ระบบบิน (Fly)",
+   CurrentValue = false,
+   Flag = "FlyToggle",
+   Callback = function(Value)
+      if Value then
+          startFly()
+      else
+          stopFly()
+      end
+   end,
+})
+
+UtilityTab:CreateSlider({
+   Name = "ความเร็วในการบิน (สูงสุด 10)",
+   Range = {1, 10},
+   Increment = 1,
+   Suffix = "Speed",
+   CurrentValue = 5,
+   Flag = "FlySpeed",
+   Callback = function(Value)
+      flySpeed = Value
+   end,
+})
+
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+    if flying then
+        stopFly()
+    end
+end)
+
+-- ==================== ระบบเสริม: ทะลุกำแพง (Noclip) ====================
+UtilityTab:CreateToggle({
+   Name = "ทะลุกำแพง (Noclip)",
+   CurrentValue = false,
+   Flag = "NoclipFlag",
+   Callback = function(Value)
+      _G.NoclipEnabled = Value
+   end,
+})
+
+RunService.Stepped:Connect(function()
+   if _G.NoclipEnabled then
+      pcall(function()
+         local char = LocalPlayer.Character
+         if char then
+            for _, part in pairs(char:GetDescendants()) do
+               if part:IsA("BasePart") then
+                  part.CanCollide = false
+               end
+            end
+         end
+      end)
+   end
+end)
+
+-- แจ้งเตือนเมื่อโหลดเสร็จ
+Rayfield:Notify({
+   Title = "อัปเดตสคริปต์ Evade สำเร็จ!",
+   Content = "แก้ไขระบบบิน, หน้าต่างพุ่ง, และปรับความเร็วเดินใช้งานได้จริง",
+   Duration = 5,
+   Image = 4483362458,
+})
