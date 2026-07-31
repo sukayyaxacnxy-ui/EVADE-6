@@ -1,0 +1,72 @@
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
+local games = {
+    [9363735110] = "https://raw.githubusercontent.com/GrexXMeng/Mengs/refs/heads/main/TsunamiBrainrot.lua",
+    [6051475510] = "https://raw.githubusercontent.com/GrexXMeng/Mengs/refs/heads/main/Fisch.lua",
+    [9186719164] = "https://raw.githubusercontent.com/GrexXMeng/Mengs/refs/heads/main/SailorPiece.lua",
+    [6739698191] = "https://raw.githubusercontent.com/GrexXMeng/Mengs/refs/heads/main/ViolenceDistrict.lua",
+    [10200395747] = "https://raw.githubusercontent.com/GrexXMeng/Mengs/refs/heads/main/GAG2.lua",
+    [121864768012064] = "https://raw.githubusercontent.com/GrexXMeng/Mengs/refs/heads/main/FishIt.lua",
+    [79378095465365] = "https://raw.githubusercontent.com/GrexXMeng/Mengs/refs/heads/main/FishIt.lua",
+    [16732694052] = "https://raw.githubusercontent.com/GrexXMeng/Mengs/refs/heads/main/Fisch.lua",
+    [131716211654599] = "https://raw.githubusercontent.com/GrexXMeng/Mengs/refs/heads/main/Fisch.lua",
+    [86362492050446] = "https://raw.githubusercontent.com/GrexXMeng/Mengs/refs/heads/main/TsunamiBrainrot.lua",
+    [83369512629707] = "https://raw.githubusercontent.com/GrexXMeng/Mengs/refs/heads/main/SawahIndo.lua",
+    [77747658251236] = "https://raw.githubusercontent.com/GrexXMeng/Mengs/refs/heads/main/SailorPiece.lua",
+    [93978595733734] = "https://raw.githubusercontent.com/GrexXMeng/Mengs/refs/heads/main/ViolenceDistrict.lua",
+    [97598239454123] = "https://raw.githubusercontent.com/GrexXMeng/Mengs/refs/heads/main/GAG2.lua",
+}
+
+local currentPlaceID = game.PlaceId
+local currentUniverseID = game.GameId
+local scriptURL = games[currentUniverseID] or games[currentPlaceID]
+
+-- สร้างหน้าต่าง Fluent UI หลัก
+local Window = Fluent:CreateWindow({
+    Title = "Darkken hub - Main UI",
+    SubTitle = "Fishing & Game System",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+-- สร้าง Tabs
+local Tabs = {
+    Main = Window:AddTab({ Title = "Main", Icon = "home" }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+}
+
+-- ตัวอย่างการใส่ฟังก์ชันเมนูตกปลา (Auto Fish / Fast Fish) ใน Tab Main
+local ToggleButton = Tabs.Main:AddToggle("AutoFishToggle", {
+    Title = "Auto Fast Fish (1s)",
+    Default = false
+})
+
+ToggleButton:OnChanged(function()
+    if Options.AutoFishToggle.Value then
+        Fluent:Notify({ Title = "Darkken hub", Content = "Auto Fish Enabled", Duration = 2 })
+        -- ใส่โค้ดลูปทำงานตกปลา 1 วิ ตรงนี้
+    else
+        Fluent:Notify({ Title = "Darkken hub", Content = "Auto Fish Disabled", Duration = 2 })
+        -- ใส่โค้ดหยุดทำงานตรงนี้
+    end
+end)
+
+-- ระบบโหลดสคริปต์แยกตามเกม
+if scriptURL then
+    Fluent:Notify({
+        Title = "Darkken hub",
+        Content = "Loaded script for current game!",
+        Duration = 3
+    })
+    print("Darkken hub: Loading script for ID " .. (games[currentUniverseID] and "Universe" or "Place"))
+    loadstring(game:HttpGet(scriptURL))()
+else
+    Fluent:Notify({
+        Title = "Darkken hub",
+        Content = "Map not supported yet! (PlaceId: " .. tostring(currentPlaceID) .. ")",
+        Duration = 5
+    })
+end
