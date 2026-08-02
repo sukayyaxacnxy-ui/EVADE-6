@@ -1,0 +1,494 @@
+-- โหลด Fluent UI Library
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
+-- สร้างหน้าต่าง UI หลัก
+local Window = Fluent:CreateWindow({
+    Title = "Evade Ultimate Script",
+    SubTitle = "โดย AI Collaborator (Fluent UI)",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.RightControl -- ปุ่มซ่อน UI (Right Control)
+})
+
+-- สร้าง Tab หลัก
+local Tabs = {
+    Main = Window:AddTab({ Title = "ฟังก์ชันหลัก", Icon = "home" }),
+    Utility = Window:AddTab({ Title = "ระบบเสริม", Icon = "settings" })
+}
+
+-- ตัวแปรควบคุมสถานะ
+local _G = _G
+_G.TokenFarm = false
+_G.AutoJump = false
+_G.PlayerSpeed = 16
+_G.NoclipEnabled = false
+
+-- Service พื้นฐาน
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+-- ==================== ฟังก์ชันที่ 1: ฟาร์มโทเค็น ====================
+local TokenFarmToggle = Tabs.Main:AddToggle("TokenFarmToggle", {
+    Title = "ฟาร์มโทเค็นออโต้ (Token Farm)",
+    Description = "วาร์ปเก็บเงินอัตโนมัติ โดยไม่ติดชนรถหรือสิ่งกีดขวาง",
+    Default = false
+})
+
+TokenFarmToggle:OnChanged(function(Value)
+    _G.TokenFarm = Value
+    
+    task.spawn(function()
+        local originalPos = nil
+        local safePlatform = nil
+        
+        while _G.TokenFarm do
+            task.wait(0.6)
+            pcall(function()
+                local character = LocalPlayer.Character
+                if character and character:FindFirstChild("HumanoidRootPart") then
+                    local rootPart = character.HumanoidRootPart
+                    
+                    local targetToken = nil
+                    for _, obj in pairs(workspace:GetDescendants()) do
+                        if not _G.TokenFarm then break end
+                        local name = string.lower(obj.Name)
+                        if (name:find("token") or name:find("money") or name:find("cash") or name:find("pickup")) and not name:find("car") and not name:find("vehicle") and not name:find("bus") then
+                            if obj:IsA("ProximityPrompt") and obj.Parent then
+                                local parentName = string.lower(obj.Parent.Name)
+                                if not parentName:find("car") and not parentName:find("vehicle") then
+                                    targetToken = obj.Parent
+                                    break
+                                end
+                            elseif obj:IsA("BasePart") then
+                                targetToken = obj
+                                break
+                            end
+                        end
+                    end
+                    
+                    if targetToken then
+                        if not originalPos then
+                            originalPos = rootPart.CFrame
+                        end
+                        
+                        if not safePlatform or not safePlatform.Parent then
+                            safePlatform = Instance.new("Part")
+                            safePlatform.Size = Vector3.new(20, 1, 20)
+                            safePlatform.Position = rootPart.Position + Vector3.new(0, 1000, 0)
+                            safePlatform.Anchored = true
+                            safePlatform.Transparency = 0.5
+                            safePlatform.Parent = workspace
+                        end
+                        
+                        rootPart.CFrame = targetToken.CFrame + Vector3.new(0, 5, 0)
+                        task.wait(0.2)
+                        
+                        for _, p in pairs(targetToken:GetDescendants()) do
+                            if p:IsA("ProximityPrompt") then
+                                fireproximityprompt(p)
+                            end
+                        end
+                        task.wait(0.2)
+                        
+                        if originalPos then
+                            rootPart.CFrame = originalPos
+                        end
+                    end
+                end
+            end)
+        end
+        
+        if safePlatform then
+            safePlatform:Destroy()
+        end
+    end)
+end)
+
+-- ==================== หน้าต่างลอย (Floating GUI) สำหรับ Auto Jump ====================
+local JumpGui = Instance.new("ScreenGui")
+JumpGui.Name = "EvadeJumpGui"
+JumpGui.ResetOnSpawn = false
+JumpGui.Enabled = false
+JumpGui.Parent = game.CoreGui
+
+local JumpFrame = Instance.new("Frame")
+JumpFrame.Size = UDim2.new(0, 180, 0, 70)
+JumpFrame.Position = UDim2.new(0.5, -90, 0.1, 0)
+JumpFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+JumpFrame.BorderSizePixel = 0
+JumpFrame.Active = true
+JumpFrame.Draggable = true
+JumpFrame.Parent = JumpGui
+
+local JumpCorner = Instance.new("UICorner")
+JumpCorner.CornerRadius = UDim.new(0, 8)
+JumpCorner.Parent = JumpFrame
+
+local JumpTitle = Instance.new("TextLabel")
+JumpTitle.Size = UDim2.new(1, 0, 0, 25)
+JumpTitle.BackgroundTransparency = 1
+JumpTitle.Text = "Auto Jump Controller"
+JumpTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+JumpTitle.TextSize = 13
+JumpTitle.Font = Enum.Font.SourceSansBold
+JumpTitle.Parent = JumpFrame
+
+local InnerJumpToggleBtn = Instance.new("TextButton")
+InnerJumpToggleBtn.Size = UDim2.new(0.8, 0, 0, 30)
+InnerJumpToggleBtn.Position = UDim2.new(0.1, 0, 0.45, 0)
+InnerJumpToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+InnerJumpToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+InnerJumpToggleBtn.Text = "Auto Jump: OFF"
+InnerJumpToggleBtn.TextSize = 14
+InnerJumpToggleBtn.Font = Enum.Font.SourceSansBold
+InnerJumpToggleBtn.Parent = JumpFrame
+
+local JumpBtnCorner = Instance.new("UICorner")
+JumpBtnCorner.CornerRadius = UDim.new(0, 6)
+JumpBtnCorner.Parent = InnerJumpToggleBtn
+
+local isJumpActive = false
+InnerJumpToggleBtn.MouseButton1Click:Connect(function()
+    isJumpActive = not isJumpActive
+    if isJumpActive then
+        InnerJumpToggleBtn.Text = "Auto Jump: ON"
+        InnerJumpToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+    else
+        InnerJumpToggleBtn.Text = "Auto Jump: OFF"
+        InnerJumpToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    end
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(0.05)
+        if isJumpActive then
+            pcall(function()
+                local character = LocalPlayer.Character
+                if character and character:FindFirstChild("Humanoid") then
+                    local humanoid = character.Humanoid
+                    if humanoid.FloorMaterial ~= Enum.Material.Air then
+                        humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+local JumpGuiToggle = Tabs.Main:AddToggle("JumpGuiToggle", {
+    Title = "เปิดหน้าต่างลอย Auto Jump (GUI)",
+    Description = "แสดงปุ่มเปิด/ปิดกระโดดรัวบนหน้าจอ",
+    Default = false
+})
+
+JumpGuiToggle:OnChanged(function(Value)
+    JumpGui.Enabled = Value
+    if not Value then
+        isJumpActive = false
+        InnerJumpToggleBtn.Text = "Auto Jump: OFF"
+        InnerJumpToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    end
+end)
+
+-- ==================== หน้าต่างลอย (Floating GUI) สำหรับพุ่งไปข้างหน้า (บังคับตามทิศกล้อง) ====================
+local DashGui = Instance.new("ScreenGui")
+DashGui.Name = "EvadeDashGui"
+DashGui.ResetOnSpawn = false
+DashGui.Enabled = false
+DashGui.Parent = game.CoreGui
+
+local DashFrame = Instance.new("Frame")
+DashFrame.Size = UDim2.new(0, 210, 0, 110)
+DashFrame.Position = UDim2.new(0.5, -105, 0.25, 0)
+DashFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+DashFrame.BorderSizePixel = 0
+DashFrame.Active = true
+DashFrame.Draggable = true
+DashFrame.Parent = DashGui
+
+local DashCorner = Instance.new("UICorner")
+DashCorner.CornerRadius = UDim.new(0, 8)
+DashCorner.Parent = DashFrame
+
+local DashTitle = Instance.new("TextLabel")
+DashTitle.Size = UDim2.new(1, 0, 0, 30)
+DashTitle.BackgroundTransparency = 1
+DashTitle.Text = "Dash Controller"
+DashTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+DashTitle.TextSize = 14
+DashTitle.Font = Enum.Font.SourceSansBold
+DashTitle.Parent = DashFrame
+
+local SpeedBox = Instance.new("TextBox")
+SpeedBox.Size = UDim2.new(0.8, 0, 0, 30)
+SpeedBox.Position = UDim2.new(0.1, 0, 0.35, 0)
+SpeedBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+SpeedBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+SpeedBox.Text = "45"
+SpeedBox.TextSize = 14
+SpeedBox.Font = Enum.Font.SourceSans
+SpeedBox.Parent = DashFrame
+
+local BoxCorner = Instance.new("UICorner")
+BoxCorner.CornerRadius = UDim.new(0, 6)
+BoxCorner.Parent = SpeedBox
+
+local InnerDashToggleBtn = Instance.new("TextButton")
+InnerDashToggleBtn.Size = UDim2.new(0.8, 0, 0, 30)
+InnerDashToggleBtn.Position = UDim2.new(0.1, 0, 0.7, 0)
+InnerDashToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+InnerDashToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+InnerDashToggleBtn.Text = "Dash: OFF"
+InnerDashToggleBtn.TextSize = 14
+InnerDashToggleBtn.Font = Enum.Font.SourceSansBold
+InnerDashToggleBtn.Parent = DashFrame
+
+local BtnCorner = Instance.new("UICorner")
+BtnCorner.CornerRadius = UDim.new(0, 6)
+BtnCorner.Parent = InnerDashToggleBtn
+
+local isDashingActive = false
+InnerDashToggleBtn.MouseButton1Click:Connect(function()
+    isDashingActive = not isDashingActive
+    if isDashingActive then
+        InnerDashToggleBtn.Text = "Dash: ON"
+        InnerDashToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+    else
+        InnerDashToggleBtn.Text = "Dash: OFF"
+        InnerDashToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    end
+end)
+
+-- พุ่งไปตามองศาหน้าจอที่ผู้เล่นหัน (Camera LookVector)
+task.spawn(function()
+    local dashBodyVel = nil
+    while true do
+        task.wait(0.05)
+        pcall(function()
+            local character = LocalPlayer.Character
+            if character and character:FindFirstChild("HumanoidRootPart") then
+                local rootPart = character.HumanoidRootPart
+                local camera = workspace.CurrentCamera
+                
+                if isDashingActive then
+                    if not dashBodyVel or dashBodyVel.Parent ~= rootPart then
+                        if dashBodyVel then dashBodyVel:Destroy() end
+                        dashBodyVel = Instance.new("BodyVelocity")
+                        dashBodyVel.MaxForce = Vector3.new(400000, 400000, 400000)
+                        dashBodyVel.Parent = rootPart
+                    end
+                    
+                    local customSpeed = tonumber(SpeedBox.Text) or 45
+                    if customSpeed > 55 then customSpeed = 55 end
+                    
+                    local camLook = camera.CFrame.LookVector
+                    local flatLook = Vector3.new(camLook.X, 0, camLook.Z).Unit
+                    
+                    dashBodyVel.Velocity = flatLook * (customSpeed * 1.5)
+                else
+                    if dashBodyVel then
+                        dashBodyVel:Destroy()
+                        dashBodyVel = nil
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+local DashGuiToggle = Tabs.Main:AddToggle("DashGuiToggle", {
+    Title = "เปิดหน้าต่างพุ่งไปข้างหน้า (Floating GUI)",
+    Description = "พุ่งตามทิศทางหน้าจอที่ผู้เล่นหัน (ปรับสปีดได้)",
+    Default = false
+})
+
+DashGuiToggle:OnChanged(function(Value)
+    DashGui.Enabled = Value
+    if not Value then
+        isDashingActive = false
+        InnerDashToggleBtn.Text = "Dash: OFF"
+        InnerDashToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    end
+end)
+
+-- ==================== ระบบเสริม: ความเร็วผู้เล่น ====================
+local SpeedSlider = Tabs.Utility:AddSlider("SpeedSlider", {
+    Title = "ความเร็วผู้เล่น (WalkSpeed)",
+    Description = "ปรับความเร็วการวิ่งในเกม",
+    Default = 16,
+    Min = 16,
+    Max = 150,
+    Rounding = 0,
+    Callback = function(Value)
+        _G.PlayerSpeed = Value
+    end
+})
+
+RunService.RenderStepped:Connect(function()
+    pcall(function()
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = _G.PlayerSpeed
+        end
+    end)
+end)
+
+-- ==================== ระบบเสริม: ระบบบิน (Fly) ====================
+local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+
+local flying = false
+local flySpeed = 5
+local bodyVelocity, bodyGyro
+
+local function startFly()
+    character = LocalPlayer.Character
+    if not character then return end
+    humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoidRootPart or not humanoid then return end
+
+    flying = true
+    humanoid.PlatformStand = true
+
+    bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    bodyVelocity.Parent = humanoidRootPart
+
+    bodyGyro = Instance.new("BodyGyro")
+    bodyGyro.P = 9e4
+    bodyGyro.MaxTorque = Vector3.new(9e4, 9e4, 9e4)
+    bodyGyro.CFrame = humanoidRootPart.CFrame
+    bodyGyro.Parent = humanoidRootPart
+
+    task.spawn(function()
+        local camera = workspace.CurrentCamera
+        local uis = game:GetService("UserInputService")
+        
+        while flying do
+            task.wait()
+            local moveDirection = Vector3.new(0, 0, 0)
+            local forward = camera.CFrame.LookVector
+            local right = camera.CFrame.RightVector
+            
+            if uis:IsKeyDown(Enum.KeyCode.W) or uis:IsKeyDown(Enum.KeyCode.Up) then
+                moveDirection = moveDirection + forward
+            end
+            if uis:IsKeyDown(Enum.KeyCode.S) or uis:IsKeyDown(Enum.KeyCode.Down) then
+                moveDirection = moveDirection - forward
+            end
+            if uis:IsKeyDown(Enum.KeyCode.A) or uis:IsKeyDown(Enum.KeyCode.Left) then
+                moveDirection = moveDirection - right
+            end
+            if uis:IsKeyDown(Enum.KeyCode.D) or uis:IsKeyDown(Enum.KeyCode.Right) then
+                moveDirection = moveDirection + right
+            end
+            
+            if humanoid.MoveDirection.Magnitude > 0 then
+                local camLook = Vector3.new(forward.X, 0, forward.Z).Unit
+                local camRight = Vector3.new(right.X, 0, right.Z).Unit
+                local moveDot = humanoid.MoveDirection:Dot(camLook)
+                
+                if moveDot > 0.3 then
+                    moveDirection = moveDirection + forward
+                elseif moveDot < -0.3 then
+                    moveDirection = moveDirection - forward
+                end
+                
+                local rightDot = humanoid.MoveDirection:Dot(camRight)
+                if rightDot > 0.3 then
+                    moveDirection = moveDirection + right
+                elseif rightDot < -0.3 then
+                    moveDirection = moveDirection - right
+                end
+            end
+            
+            bodyVelocity.Velocity = moveDirection * (flySpeed * 10)
+            bodyGyro.CFrame = camera.CFrame
+            humanoidRootPart.RotVelocity = Vector3.new(0, 0, 0)
+        end
+    end)
+end
+
+local function stopFly()
+    flying = false
+    if character then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.PlatformStand = false
+        end
+    end
+    if bodyVelocity then bodyVelocity:Destroy() end
+    if bodyGyro then bodyGyro:Destroy() end
+end
+
+local FlyToggle = Tabs.Utility:AddToggle("FlyToggle", {
+    Title = "เปิด/ปิด ระบบบิน (Fly)",
+    Default = false
+})
+
+FlyToggle:OnChanged(function(Value)
+    if Value then
+        startFly()
+    else
+        stopFly()
+    end
+end)
+
+local FlySpeedSlider = Tabs.Utility:AddSlider("FlySpeedSlider", {
+    Title = "ความเร็วในการบิน",
+    Default = 5,
+    Min = 1,
+    Max = 10,
+    Rounding = 0,
+    Callback = function(Value)
+        flySpeed = Value
+    end
+})
+
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+    if flying then
+        stopFly()
+    end
+end)
+
+-- ==================== ระบบเสริม: ทะลุกำแพง (Noclip) ====================
+local NoclipToggle = Tabs.Utility:AddToggle("NoclipToggle", {
+    Title = "ทะลุกำแพง (Noclip)",
+    Default = false
+})
+
+NoclipToggle:OnChanged(function(Value)
+    _G.NoclipEnabled = Value
+end)
+
+RunService.Stepped:Connect(function()
+    if _G.NoclipEnabled then
+        pcall(function()
+            local char = LocalPlayer.Character
+            if char then
+                for _, part in pairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- เลือกแท็บเริ่มต้นให้แสดงเป็น Tab หลัก
+Window:SelectTab(1)
+
+-- แจ้งเตือนเมื่อโหลดเสร็จสไตล์ Fluent
+Fluent:Notify({
+    Title = "อัปเดต UI สำเร็จ!",
+    Content = "เปลี่ยนเป็น Fluent UI พร้อมระบบพุ่งตามกล้องและแก้บัคครบถ้วน",
+    Duration = 5
+})
