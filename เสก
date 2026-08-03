@@ -1,0 +1,63 @@
+-- โหลด WindUI จาก GitHub (หรือลิงก์หลักของไลบรารี)
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/init.lua"))()
+
+-- สร้างหน้าต่างหลัก (Window)
+local Window = WindUI:CreateWindow({
+    Title = "Booster Auto Buy",
+    Icon = "rbxassetid://6023426915", -- ไอคอน (สามารถเปลี่ยนได้)
+    Author = "User",
+    Folder = "WindUI_Config",
+    Size = UDim2.fromOffset(450, 300),
+    Transparent = true,
+    Theme = "Dark", -- สามารถเปลี่ยนเป็น Light ได้
+    SideBarWidth = 170,
+})
+
+-- สร้าง Tab สำหรับใส่ฟังก์ชัน
+local MainTab = Window:Tab({
+    Title = "Main",
+    Icon = "rbxassetid://6023426915",
+})
+
+-- สร้าง Section ภายใน Tab
+local Section = MainTab:Section({
+    Title = "Booster Controls",
+})
+
+-- สร้างปุ่มกด (Button) สำหรับรันฟังก์ชันซื้อ Booster
+Section:Button({
+    Title = "Buy Growth Booster",
+    Desc = "คลิกเพื่อส่งคำขอซื้อ Growth Booster",
+    Callback = function()
+        -- โค้ดฟังก์ชันที่คุณต้องการรัน
+        local args = {
+            "Growth Booster",
+            0
+        }
+        
+        local success, err = pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("BuyBoosterRequest"):FireServer(unpack(args))
+        end)
+        
+        if success then
+            WindUI:Notify({
+                Title = "สำเร็จ",
+                Content = "ส่งคำขอซื้อ Growth Booster เรียบร้อยแล้ว!",
+                Duration = 3
+            })
+        else
+            WindUI:Notify({
+                Title = "เกิดข้อผิดพลาด",
+                Content = "ไม่สามารถส่งคำขอได้: " .. tostring(err),
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- แจ้งเตือนเมื่อ UI โหลดเสร็จ
+WindUI:Notify({
+    Title = "System Loaded",
+    Content = "UI ทำงานสำเร็จพร้อมใช้งาน!",
+    Duration = 3
+})
